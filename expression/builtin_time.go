@@ -128,7 +128,7 @@ var (
 	_ builtinFunc = &builtinUTCDateSig{}
 	_ builtinFunc = &builtinUTCTimestampSig{}
 	_ builtinFunc = &builtinExtractSig{}
-	_ builtinFunc = &builtinArithmeticSig{}
+	//_ builtinFunc = &builtinArithmeticSig{}
 	_ builtinFunc = &builtinUnixTimestampSig{}
 	_ builtinFunc = &builtinAddTimeSig{}
 	_ builtinFunc = &builtinConvertTzSig{}

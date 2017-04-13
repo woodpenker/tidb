@@ -18,6 +18,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb/ast"
+	"github.com/pingcap/tidb/mysql"
 	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/util/codec"
 	"github.com/pingcap/tidb/util/mvmap"
@@ -66,7 +67,18 @@ func ColumnSubstitute(expr Expression, schema *Schema, newExprs []Expression) Ex
 func datumsToConstants(datums []types.Datum) []Expression {
 	constants := make([]Expression, 0, len(datums))
 	for _, d := range datums {
-		constants = append(constants, &Constant{Value: d})
+		var retType *types.FieldType
+		switch d.Kind() {
+		case types.KindFloat64, types.KindFloat32:
+			retType = types.NewFieldType(mysql.TypeDouble)
+		case types.KindInt64, types.KindUint64:
+			retType = types.NewFieldType(mysql.TypeLonglong)
+		case types.KindMysqlDecimal:
+			retType = types.NewFieldType(mysql.TypeNewDecimal)
+		default:
+			retType = types.NewFieldType(mysql.TypeVarString)
+		}
+		constants = append(constants, &Constant{Value: d, RetType: retType})
 	}
 	return constants
 }

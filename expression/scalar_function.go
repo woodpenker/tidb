@@ -20,6 +20,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb/context"
 	"github.com/pingcap/tidb/model"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/util/codec"
 	"github.com/pingcap/tidb/util/types"
 )
@@ -143,6 +144,59 @@ func (sf *ScalarFunction) Decorrelate(schema *Schema) Expression {
 // Eval implements Expression interface.
 func (sf *ScalarFunction) Eval(row []types.Datum) (types.Datum, error) {
 	return sf.Function.eval(row)
+}
+
+// ValInt implements Expression interface.
+func (sf *ScalarFunction) ValInt(row []types.Datum, sc *variable.StatementContext) (int64, bool, error) {
+	res, err := sf.Eval(row)
+	if err != nil {
+		return 0, false, errors.Trace(err)
+	}
+	if res.IsNull() {
+		return 0, true, nil
+	}
+	val, err := res.ToInt64(sc)
+	return val, false, err
+}
+
+// ValReal implements Expression interface.
+func (sf *ScalarFunction) ValReal(row []types.Datum, sc *variable.StatementContext) (float64, bool, error) {
+	res, err := sf.Eval(row)
+	if err != nil {
+		return 0, false, errors.Trace(err)
+	}
+	if res.IsNull() {
+		return 0, true, nil
+	}
+	val, err := res.ToFloat64(sc)
+	return val, false, err
+}
+
+// ValDecimal implements Expression interface.
+func (sf *ScalarFunction) ValDecimal(row []types.Datum, sc *variable.StatementContext) (*types.MyDecimal, bool, error) {
+	decZero := types.NewDecFromInt(0)
+	res, err := sf.Eval(row)
+	if err != nil {
+		return decZero, false, errors.Trace(err)
+	}
+	if res.IsNull() {
+		return decZero, true, nil
+	}
+	val, err := res.ToDecimal(sc)
+	return val, false, err
+}
+
+// ValString implements Expression interface.
+func (sf *ScalarFunction) ValString(row []types.Datum, sc *variable.StatementContext) (string, bool, error) {
+	res, err := sf.Eval(row)
+	if err != nil {
+		return "", false, errors.Trace(err)
+	}
+	if res.IsNull() {
+		return "", true, nil
+	}
+	val, err := res.ToString()
+	return val, false, err
 }
 
 // HashCode implements Expression interface.

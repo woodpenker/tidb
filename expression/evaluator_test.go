@@ -343,7 +343,7 @@ func (s *testEvaluatorSuite) TestBinopNumeric(c *C) {
 			d := types.NewDatum(t.ret)
 			r, err := d.ToFloat64(sc)
 			c.Assert(err, IsNil)
-			c.Assert(r, Equals, f)
+			c.Assert(f, Equals, r)
 		}
 	}
 }
@@ -599,7 +599,11 @@ func (s *testEvaluatorSuite) TestDynamic(c *C) {
 		ast.RowCount:     0,
 	}
 	for name, fc := range funcs {
-		f, _ := fc.getFunction(nil, s.ctx)
+		args := make([]Expression, 10)
+		for i := range args {
+			args[i] = &Constant{Value: types.NewIntDatum(1), RetType: types.NewFieldType(mysql.TypeString)}
+		}
+		f, _ := fc.getFunction(args, s.ctx)
 		if _, ok := dynamicFuncs[name]; ok {
 			c.Assert(f.isDeterministic(), IsFalse)
 		} else {

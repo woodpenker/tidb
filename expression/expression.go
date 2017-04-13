@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/tidb/context"
 	"github.com/pingcap/tidb/model"
 	"github.com/pingcap/tidb/mysql"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/terror"
 	"github.com/pingcap/tidb/util/codec"
 	"github.com/pingcap/tidb/util/types"
@@ -51,6 +52,18 @@ type Expression interface {
 	json.Marshaler
 	// Eval evaluates an expression through a row.
 	Eval(row []types.Datum) (types.Datum, error)
+
+	// ValInt returns the int representation of expression.
+	ValInt(row []types.Datum, sc *variable.StatementContext) (int64, bool, error)
+
+	// ValReal returns the real represention of expression.
+	ValReal(row []types.Datum, sc *variable.StatementContext) (float64, bool, error)
+
+	// ValDecimal returns the decimal representation of expression.
+	ValDecimal(row []types.Datum, sc *variable.StatementContext) (*types.MyDecimal, bool, error)
+
+	// ValString returns the string representation of expression.
+	ValString(row []types.Datum, sc *variable.StatementContext) (string, bool, error)
 
 	// Get the expression return type.
 	GetType() *types.FieldType
@@ -140,6 +153,42 @@ func (c *Constant) GetType() *types.FieldType {
 // Eval implements Expression interface.
 func (c *Constant) Eval(_ []types.Datum) (types.Datum, error) {
 	return c.Value, nil
+}
+
+// ValInt implements Expression interface.
+func (c *Constant) ValInt(_ []types.Datum, sc *variable.StatementContext) (int64, bool, error) {
+	if c.Value.IsNull() {
+		return 0, true, nil
+	}
+	val, _ := c.Value.ToInt64(sc)
+	return val, false, nil
+}
+
+// ValReal implements Expression interface.
+func (c *Constant) ValReal(_ []types.Datum, sc *variable.StatementContext) (float64, bool, error) {
+	if c.Value.IsNull() {
+		return 0, true, nil
+	}
+	val, _ := c.Value.ToFloat64(sc)
+	return val, false, nil
+}
+
+// ValDecimal implements Expression interface.
+func (c *Constant) ValDecimal(_ []types.Datum, sc *variable.StatementContext) (*types.MyDecimal, bool, error) {
+	if c.Value.IsNull() {
+		return new(types.MyDecimal), true, nil
+	}
+	val, _ := c.Value.ToDecimal(sc)
+	return val, false, nil
+}
+
+// ValString implements Expression interface.
+func (c *Constant) ValString(_ []types.Datum, sc *variable.StatementContext) (string, bool, error) {
+	if c.Value.IsNull() {
+		return "", true, nil
+	}
+	val, _ := c.Value.ToString()
+	return val, false, nil
 }
 
 // Equal implements Expression interface.

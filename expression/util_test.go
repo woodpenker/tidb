@@ -51,8 +51,8 @@ func (s *testUtilSuite) TestDistinct(c *check.C) {
 func (s *testUtilSuite) TestSubstituteCorCol2Constant(c *check.C) {
 	defer testleak.AfterTest(c)()
 	ctx := mock.NewContext()
-	corCol1 := &CorrelatedColumn{Data: &One.Value}
-	corCol2 := &CorrelatedColumn{Data: &One.Value}
+	corCol1 := &CorrelatedColumn{Data: &One.Value, Column: Column{RetType: One.GetType()}}
+	corCol2 := &CorrelatedColumn{Data: &One.Value, Column: Column{RetType: One.GetType()}}
 	cast := NewCastFunc(types.NewFieldType(mysql.TypeLonglong), corCol1, ctx)
 	plus := newFunction(ast.Plus, cast, corCol2)
 	plus2 := newFunction(ast.Plus, plus, One)

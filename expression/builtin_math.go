@@ -74,7 +74,9 @@ var (
 	_ builtinFunc = &builtinCRC32Sig{}
 	_ builtinFunc = &builtinSignSig{}
 	_ builtinFunc = &builtinSqrtSig{}
-	_ builtinFunc = &builtinArithmeticSig{}
+	_ builtinFunc = &builtinArithmeticIntSig{}
+	_ builtinFunc = &builtinArithmeticRealSig{}
+	_ builtinFunc = &builtinArithmeticDecSig{}
 	_ builtinFunc = &builtinAcosSig{}
 	_ builtinFunc = &builtinAsinSig{}
 	_ builtinFunc = &builtinAtanSig{}
@@ -645,54 +647,206 @@ type arithmeticFunctionClass struct {
 }
 
 func (c *arithmeticFunctionClass) getFunction(args []Expression, ctx context.Context) (builtinFunc, error) {
-	return &builtinArithmeticSig{newBaseBuiltinFunc(args, ctx), c.op}, errors.Trace(c.verifyArgs(args))
+	tc0, tc1 := args[0].GetType().ToClass(), args[1].GetType().ToClass()
+	if tc0 == types.ClassReal || tc1 == types.ClassReal || tc0 == types.ClassString || tc1 == types.ClassString {
+		return &builtinArithmeticRealSig{newBaseBuiltinFunc(args, ctx), c.op}, errors.Trace(c.verifyArgs(args))
+	} else if tc0 == types.ClassDecimal || tc1 == types.ClassDecimal {
+		return &builtinArithmeticDecSig{newBaseBuiltinFunc(args, ctx), c.op}, errors.Trace(c.verifyArgs(args))
+	}
+	return &builtinArithmeticIntSig{newBaseBuiltinFunc(args, ctx), c.op}, errors.Trace(c.verifyArgs(args))
+}
+
+// builtinArimetricDecSig is a builtin func signature for two decimals.
+type builtinArithmeticDecSig struct {
+	baseBuiltinFunc
+
+	op opcode.Op
+}
+
+func (s *builtinArithmeticDecSig) eval(row []types.Datum) (d types.Datum, err error) {
+	sc := s.getCtx().GetSessionVars().StmtCtx
+	arg0, isKindNull, err := s.args[0].ValDecimal(row, sc)
+	if err != nil {
+		return d, errors.Trace(err)
+	}
+	if isKindNull {
+		return
+	}
+	arg1, isKindNull, err := s.args[1].ValDecimal(row, sc)
+	if err != nil {
+		return d, errors.Trace(err)
+	}
+	if isKindNull {
+		return
+	}
+	res := new(types.MyDecimal)
+	switch s.op {
+	case opcode.Plus:
+		err = types.DecimalAdd(arg0, arg1, res)
+	case opcode.Minus:
+		err = types.DecimalSub(arg0, arg1, res)
+	case opcode.Mul:
+		err = types.DecimalMul(arg0, arg1, res)
+	case opcode.Mod:
+		err = types.DecimalMod(arg0, arg1, res)
+		if err == types.ErrDivByZero {
+			err = nil
+			return
+		}
+	case opcode.Div:
+		err = types.DecimalDiv(arg0, arg1, res, types.DivFracIncr)
+		if err == types.ErrDivByZero {
+			err = nil
+		}
+	case opcode.IntDiv:
+		err = types.DecimalDiv(arg0, arg1, res, types.DivFracIncr)
+		if err == types.ErrDivByZero {
+			return d, nil
+		}
+		iVal, err1 := res.ToInt()
+		if err == nil && err1 != types.ErrTruncated {
+			err = err1
+		}
+		d.SetInt64(iVal)
+		return d, errors.Trace(err)
+	default:
+		return d, errInvalidOperation.Gen("invalid op %v in arithmetic operation", s.op)
+	}
+	d.SetMysqlDecimal(res)
+	return d, errors.Trace(err)
+}
+
+// builtinArimetricDecSig is a builtin func signature for two reals.
+type builtinArithmeticRealSig struct {
+	baseBuiltinFunc
+
+	op opcode.Op
+}
+
+func (s *builtinArithmeticRealSig) eval(row []types.Datum) (d types.Datum, err error) {
+	sc := s.getCtx().GetSessionVars().StmtCtx
+	arg0, isKindNull, err := s.args[0].ValReal(row, sc)
+	if err != nil {
+		return d, errors.Trace(err)
+	}
+	if isKindNull {
+		return
+	}
+	arg1, isKindNull, err := s.args[1].ValReal(row, sc)
+	if err != nil {
+		return d, errors.Trace(err)
+	}
+	if isKindNull {
+		return
+	}
+	var res float64
+	switch s.op {
+	case opcode.Plus:
+		res = arg0 + arg1
+	case opcode.Minus:
+		res = arg0 - arg1
+	case opcode.Mul:
+		res = arg0 * arg1
+	case opcode.Mod:
+		if arg1 == 0 {
+			return
+		}
+		res = math.Mod(arg0, arg1)
+	case opcode.Div:
+		if arg1 == 0 {
+			return d, nil
+		}
+		res = arg0 / arg1
+	case opcode.IntDiv:
+		a, b := new(types.MyDecimal), new(types.MyDecimal)
+		err = a.FromFloat64(arg0)
+		if err != nil {
+			return d, errors.Trace(err)
+		}
+		err = b.FromFloat64(arg1)
+		if err != nil {
+			return d, errors.Trace(err)
+		}
+		// division by zero return null
+		to := new(types.MyDecimal)
+		err = types.DecimalDiv(a, b, to, types.DivFracIncr)
+		if err != types.ErrDivByZero {
+			iVal, err1 := to.ToInt()
+			if err == nil && err1 != types.ErrTruncated {
+				err = err1
+			}
+			d.SetInt64(iVal)
+		} else {
+			err = nil
+		}
+		return d, errors.Trace(err)
+	default:
+		return d, errInvalidOperation.Gen("invalid op %v in arithmetic operation", s.op)
+	}
+	return types.NewFloat64Datum(res), nil
+}
+
+// builtinArimetricDecSig is a builtin func signature for two integers.
+type builtinArithmeticIntSig struct {
+	baseBuiltinFunc
+
+	op opcode.Op
+}
+
+func (s *builtinArithmeticIntSig) eval(row []types.Datum) (d types.Datum, err error) {
+	sc := s.getCtx().GetSessionVars().StmtCtx
+	arg0, isKindNull, err := s.args[0].ValInt(row, sc)
+	if err != nil {
+		return d, errors.Trace(err)
+	}
+	if isKindNull {
+		return
+	}
+	arg1, isKindNull, err := s.args[1].ValInt(row, sc)
+	if err != nil {
+		return d, errors.Trace(err)
+	}
+	if isKindNull {
+		return
+	}
+	var res int64
+	switch s.op {
+	case opcode.Plus:
+		res = arg0 + arg1
+	case opcode.Minus:
+		res = arg0 - arg1
+	case opcode.Mul:
+		res = arg0 * arg1
+	case opcode.Mod:
+		if arg1 == 0 {
+			return d, nil
+		}
+		res = arg0 % arg1
+	case opcode.Div:
+		a, b := types.NewDecFromInt(arg0), types.NewDecFromInt(arg1)
+		to := new(types.MyDecimal)
+		err = types.DecimalDiv(a, b, to, types.DivFracIncr)
+		if err != types.ErrDivByZero {
+			d.SetMysqlDecimal(to)
+		} else {
+			err = nil
+		}
+		return d, errors.Trace(err)
+	case opcode.IntDiv:
+		if arg1 == 0 {
+			return
+		}
+		res = arg0 / arg1
+	default:
+		return d, errInvalidOperation.Gen("invalid op %v in arithmetic operation", s.op)
+	}
+	return types.NewIntDatum(res), nil
 }
 
 type builtinArithmeticSig struct {
 	baseBuiltinFunc
 
 	op opcode.Op
-}
-
-func (s *builtinArithmeticSig) eval(row []types.Datum) (d types.Datum, err error) {
-	args, err := s.evalArgs(row)
-	if err != nil {
-		return d, errors.Trace(err)
-	}
-	sc := s.ctx.GetSessionVars().StmtCtx
-	a, err := types.CoerceArithmetic(sc, args[0])
-	if err != nil {
-		return d, errors.Trace(err)
-	}
-
-	b, err := types.CoerceArithmetic(sc, args[1])
-	if err != nil {
-		return d, errors.Trace(err)
-	}
-	a, b, err = types.CoerceDatum(sc, a, b)
-	if err != nil {
-		return d, errors.Trace(err)
-	}
-	if a.IsNull() || b.IsNull() {
-		return
-	}
-
-	switch s.op {
-	case opcode.Plus:
-		return types.ComputePlus(a, b)
-	case opcode.Minus:
-		return types.ComputeMinus(a, b)
-	case opcode.Mul:
-		return types.ComputeMul(a, b)
-	case opcode.Div:
-		return types.ComputeDiv(sc, a, b)
-	case opcode.Mod:
-		return types.ComputeMod(sc, a, b)
-	case opcode.IntDiv:
-		return types.ComputeIntDiv(sc, a, b)
-	default:
-		return d, errInvalidOperation.Gen("invalid op %v in arithmetic operation", s.op)
-	}
 }
 
 type acosFunctionClass struct {

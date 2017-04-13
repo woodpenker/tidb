@@ -20,6 +20,7 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb/context"
 	"github.com/pingcap/tidb/model"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/util/codec"
 	"github.com/pingcap/tidb/util/types"
 )
@@ -39,6 +40,42 @@ func (col *CorrelatedColumn) Clone() Expression {
 // Eval implements Expression interface.
 func (col *CorrelatedColumn) Eval(row []types.Datum) (types.Datum, error) {
 	return *col.Data, nil
+}
+
+// ValInt implements Expression interface.
+func (col *CorrelatedColumn) ValInt(row []types.Datum, sc *variable.StatementContext) (int64, bool, error) {
+	if col.Data.IsNull() {
+		return 0, true, nil
+	}
+	val, err := col.Data.ToInt64(sc)
+	return val, false, err
+}
+
+// ValReal implements Expression interface.
+func (col *CorrelatedColumn) ValReal(row []types.Datum, sc *variable.StatementContext) (float64, bool, error) {
+	if col.Data.IsNull() {
+		return 0, true, nil
+	}
+	val, err := col.Data.ToFloat64(sc)
+	return val, false, err
+}
+
+// ValDecimal implements Expression interface.
+func (col *CorrelatedColumn) ValDecimal(row []types.Datum, sc *variable.StatementContext) (*types.MyDecimal, bool, error) {
+	if col.Data.IsNull() {
+		return new(types.MyDecimal), true, nil
+	}
+	val, err := col.Data.ToDecimal(sc)
+	return val, false, err
+}
+
+// ValString implements Expression interface.
+func (col *CorrelatedColumn) ValString(row []types.Datum, sc *variable.StatementContext) (string, bool, error) {
+	if col.Data.IsNull() {
+		return "", true, nil
+	}
+	val, err := col.Data.ToString()
+	return val, false, err
 }
 
 // Equal implements Expression interface.
@@ -122,6 +159,46 @@ func (col *Column) GetType() *types.FieldType {
 // Eval implements Expression interface.
 func (col *Column) Eval(row []types.Datum) (types.Datum, error) {
 	return row[col.Index], nil
+}
+
+// ValInt implements Expression interface.
+func (col *Column) ValInt(row []types.Datum, sc *variable.StatementContext) (int64, bool, error) {
+	res, _ := col.Eval(row)
+	if res.IsNull() {
+		return 0, true, nil
+	}
+	val, err := res.ToInt64(sc)
+	return val, false, err
+}
+
+// ValReal implements Expression interface.
+func (col *Column) ValReal(row []types.Datum, sc *variable.StatementContext) (float64, bool, error) {
+	res, _ := col.Eval(row)
+	if res.IsNull() {
+		return 0, true, nil
+	}
+	val, err := res.ToFloat64(sc)
+	return val, false, err
+}
+
+// ValDecimal implements Expression interface.
+func (col *Column) ValDecimal(row []types.Datum, sc *variable.StatementContext) (*types.MyDecimal, bool, error) {
+	res, _ := col.Eval(row)
+	if res.IsNull() {
+		return new(types.MyDecimal), true, nil
+	}
+	val, err := res.ToDecimal(sc)
+	return val, false, err
+}
+
+// ValString implements Expression interface.
+func (col *Column) ValString(row []types.Datum, sc *variable.StatementContext) (string, bool, error) {
+	res, _ := col.Eval(row)
+	if res.IsNull() {
+		return "", true, nil
+	}
+	val, err := res.ToString()
+	return val, false, err
 }
 
 // Clone implements Expression interface.
