@@ -1250,43 +1250,52 @@ func (s *testEvaluatorSuite) TestTimeToSec(c *C) {
 }
 func (s *testEvaluatorSuite) TestPeriodDiff(c *C) {
 	tests := []struct {
-		p1     string
-		p2     string
-		expect int64
+		p1     interface{}
+		p2     interface{}
+		expect interface{}
 	}{
-		{"201101", "201012", 1},
-		{"200108", "207809", 925},
-		{"8910", "201908", 358},
-		{"8806", "9810", 124},
-		{"9005", "9005", 0},
-		{"7609", "212009", 1728},
-		{"0109", "0309", 24},
-		{"0109", "199909", 24},
-		{"0109", "201109", 120},
-		{"201101", "201101", 0},
-		{"199005", "199005", 0},
-		{"201005", "201005", 0},
-		{"199005", "9005", 0},
-		{"9005", "199005", 0},
-		{"188604", "188704", 12},
-		{"188604", "188703", 11},
-		{"188604", "188705", 13},
-		{"188604", "188705", 13},
+		{string("201101"), string("201012"), int64(1)},
+		{string("200108"), string("207809"), int64(925)},
+		{string("8910"), string("201908"), int64(358)},
+		{string("8806"), string("9810"), int64(124)},
+		{string("9005"), string("9005"), int64(0)},
+		{string("7609"), string("212009"), int64(1728)},
+		{string("0109"), string("0309"), int64(24)},
+		{string("0109"), string("199909"), int64(24)},
+		{string("0109"), string("201109"), int64(120)},
+		{string("201101"), string("201101"), int64(0)},
+		{string("199005"), string("199005"), int64(0)},
+		{string("201005"), string("201005"), int64(0)},
+		{string("199005"), string("9005"), int64(0)},
+		{string("9005"), string("199005"), int64(0)},
+		{string("188604"), string("188704"), int64(12)},
+		{string("188604"), string("188703"), int64(11)},
+		{string("188604"), string("188705"), int64(13)},
+		{string("188604"), string("188705"), int64(13)},
+		{string("999999"), string("999999"), nil},
+		{string("1000000"), string("201701"), nil},
+		{string("999999999"), string("201701"), nil},
+		{string("999999999"), string("999999999"), nil},
+		{string("-201701"), string("201701"), nil},
+		{nil, string("201701"), nil},
+		{string("1000000"), nil, nil},
+		{nil, nil, nil},
 	}
 	defer testleak.AfterTest(c)()
 	fc := funcs[ast.PeriodDiff]
 	for _, test := range tests {
-		arg1 := types.NewStringDatum(test.p1)
-		arg2 := types.NewStringDatum(test.p2)
-		f, err := fc.getFunction(datumsToConstants([]types.Datum{arg1, arg2}), s.ctx)
+
+		f, err := fc.getFunction(datumsToConstants(types.MakeDatums(test.p1, test.p2)), s.ctx)
 		c.Assert(err, IsNil)
 		result, err := f.eval(nil)
-		c.Assert(err, IsNil)
-		c.Assert(result.GetInt64(), Equals, test.expect)
+
+		if test.expect == nil {
+			c.Assert(result.Kind(), Equals, types.KindNull)
+		} else {
+			c.Assert(err, IsNil)
+			expect, _ := test.expect.(int64)
+			c.Assert(result.GetInt64(), Equals, expect)
+		}
 	}
-	var argNull types.Datum
-	f, _ := fc.getFunction(datumsToConstants([]types.Datum{argNull}), s.ctx)
-	crypt, err := f.eval(nil)
-	c.Assert(err, IsNil)
-	c.Assert(crypt.IsNull(), IsTrue)
+
 }

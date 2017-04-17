@@ -36,6 +36,7 @@ const ( // GET_FORMAT first argument.
 	dateFormat     = "DATE"
 	datetimeFormat = "DATETIME"
 	timeFormat     = "TIME"
+	ymDateMaxInt   = 999999
 )
 
 const ( // GET_FORMAT location.
@@ -1854,7 +1855,7 @@ type builtinPeriodDiffSig struct {
 func (b *builtinPeriodDiffSig) eval(row []types.Datum) (d types.Datum, err error) {
 	args, err := b.evalArgs(row)
 	if err != nil {
-		return types.Datum{}, errors.Trace(err)
+		return d, errors.Trace(err)
 	}
 	if args[0].IsNull() || args[1].IsNull() {
 		return d, nil
@@ -1865,14 +1866,15 @@ func (b *builtinPeriodDiffSig) eval(row []types.Datum) (d types.Datum, err error
 	if err != nil {
 		return d, errors.Trace(err)
 	}
+	if period1 <= 0 || period1 > ymDateMaxInt {
+		return d, errors.Errorf("args[0] not in the format YYMM or YYYYMM")
+	}
 	period2, err := args[1].ToInt64(sc)
 	if err != nil {
 		return d, errors.Trace(err)
 	}
-	//input check format
-	if period1 <= 0 || period2 <= 0 || period1 > 999999 || period2 > 999999 {
-		d.SetNull()
-		return d, errors.Errorf("not in the format YYMM or YYYYMM")
+	if period2 <= 0 || period2 > ymDateMaxInt {
+		return d, errors.Errorf("args[1] not in the format YYMM or YYYYMM")
 	}
 	//calculate total months from A.D. 0
 	y1 := period1 / 100
@@ -1880,7 +1882,6 @@ func (b *builtinPeriodDiffSig) eval(row []types.Datum) (d types.Datum, err error
 	y2 := period2 / 100
 	m2 := period2 % 100
 	if m1 > 12 || m2 > 12 || m1 == 0 || m2 == 0 {
-		d.SetNull()
 		return d, errors.Errorf("Month not in the right format")
 	}
 	// if YY >70 get 19YY else get 20YY  and if  YYY we got error format
@@ -1889,16 +1890,16 @@ func (b *builtinPeriodDiffSig) eval(row []types.Datum) (d types.Datum, err error
 	} else if y1 < 100 {
 		y1 += 1900
 	} else if y1 < 1000 {
-		d.SetNull()
-		return d, errors.Errorf("not in the format YYMM or YYYYMM")
+
+		return d, errors.Errorf("args[0]  not in the format YYMM or YYYYMM")
 	}
 	if y2 < 70 {
 		y2 += 2000
 	} else if y2 < 100 {
 		y2 += 1900
 	} else if y2 < 1000 {
-		d.SetNull()
-		return d, errors.Errorf("not in the format YYMM or YYYYMM")
+
+		return d, errors.Errorf("args[1]  not in the format YYMM or YYYYMM")
 	}
 
 	mCount1 := y1*12 + m1
